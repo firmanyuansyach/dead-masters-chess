@@ -1,1 +1,0 @@
-{"hooks":[{"command":"node ../build-book.mjs","description":"Whenever data/games.json or data/book.json is regenerated, replay every source game through chess.js and refuse any game with an illegal move. The ghost must never quote a move Morphy did not play.","name":"validate-morphy-dataset","trigger":"on-demand","workingDirectory":"."}],"version":"1.0"}
