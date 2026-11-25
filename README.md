@@ -47,7 +47,7 @@ highlighted square (or drag). The ghost replies after a suitably theatrical paus
    legal entered the book; 123 records were rejected (odds games played from
    non-start positions, and a handful of corrupt old transcriptions).
 2. **The engine** (`src/ghost.js`): when the position leaves the book, a
-   small minimax search (alpha-beta, depth 3, material + piece-square
+   small minimax search (alpha-beta, depth 2, material + piece-square
    evaluation, quiescence on captures) picks the ghost's move. It plays like
    a spirited amateur of the era, not a modern engine — by design.
 3. **The rules** (`src/chess.js`): vendored `chess.js` 1.4.0 (MIT), the
@@ -67,6 +67,9 @@ data/
   book.json           6,020 FEN -> Morphy move(s) with game references
 tests/
   playtest.mjs        headless self-play: full games, book-hit rate, end states
+  ui-test.mjs         jsdom UI test: drives the real app with clicks —
+                      promotion modal, ghost-timer race, Play as Black,
+                      full game to termination (needs `npm install`)
 .kiro/
   specs/              Kiro spec: requirements, design, tasks
   steering/           product / tech / structure guidance for Kiro

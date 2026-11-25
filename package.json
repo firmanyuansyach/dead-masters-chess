@@ -1,0 +1,1 @@
+{"description":"Play chess against the ghost of Paul Morphy — Kiroween 2026, Costume Contest","devDependencies":{"jsdom":"^31.0.1"},"name":"dead-masters-chess","private":true,"scripts":{"test":"node tests/playtest.mjs","test:all":"node tests/playtest.mjs && node tests/ui-test.mjs","test:ui":"node tests/ui-test.mjs"},"type":"module","version":"1.0.0"}
