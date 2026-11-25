@@ -29,6 +29,8 @@ let mode = 'play'; // 'play' | 'replay'
 let selected = null;
 let legalTargets = [];
 let ghostThinking = false;
+let ghostTimer = null; // pending setTimeout(ghostReply); cleared on New game /
+// Resign / replay so a stale reply can never fire against a reset board.
 let offBookAnnounced = false;
 let pendingPromotion = null;
 let replayGame = null;
@@ -135,9 +137,13 @@ function renderCaptured() {
       for (let i = 0; i < start[t] - have[color][t]; i++) lost[color].push(GLYPH[color][t]);
     }
   }
+  // lost[c] = pieces of colour c that are gone from the board. Pieces of
+  // the player's colour that are gone were taken by the ghost, and vice
+  // versa — so the labels flip when the player is Black.
+  const ghostColor = playerColor === 'w' ? 'b' : 'w';
   capturedEl.textContent =
-    (lost.w.length ? `Ghost has taken: ${lost.w.join(' ')}   ` : '') +
-    (lost.b.length ? `You have taken: ${lost.b.join(' ')}` : '');
+    (lost[playerColor].length ? `Ghost has taken: ${lost[playerColor].join(' ')}   ` : '') +
+    (lost[ghostColor].length ? `You have taken: ${lost[ghostColor].join(' ')}` : '');
 }
 
 function updateStatus() {
@@ -147,9 +153,11 @@ function updateStatus() {
     return;
   }
   if (chess.isCheckmate()) {
-    statusEl.textContent = chess.turn() === playerColor
-      ? 'Checkmate — the ghost wins.'
-      : 'Checkmate — you win!';
+    statusEl.textContent = mode === 'replay'
+      ? 'Checkmate.'
+      : chess.turn() === playerColor
+        ? 'Checkmate — the ghost wins.'
+        : 'Checkmate — you win!';
   } else if (chess.isStalemate()) {
     statusEl.textContent = 'Stalemate — a draw.';
   } else if (chess.isDraw()) {
@@ -227,11 +235,23 @@ function afterMove(playerMv) {
     ghostThinking = true;
     ghostStateEl.textContent = 'The ghost is thinking…';
     render();
-    setTimeout(ghostReply, 700 + Math.random() * 700);
+    ghostTimer = setTimeout(ghostReply, 700 + Math.random() * 700);
   }
 }
 
+function clearGhostTimer() {
+  if (ghostTimer) { clearTimeout(ghostTimer); ghostTimer = null; }
+}
+
 function ghostReply() {
+  ghostTimer = null;
+  // Belt and braces: a reply must only ever land in a live game, on the
+  // ghost's turn. (The timer is also cleared on every state change, so a
+  // stale reply should never reach here.)
+  if (mode !== 'play' || resigned || chess.isGameOver() || chess.turn() === playerColor) {
+    ghostThinking = false;
+    return;
+  }
   ghostThinking = false;
   let decision = null;
   try {
@@ -303,6 +323,7 @@ function showGameOver(text) {
 
 // ---------- controls ----------
 function newGame(asBlack) {
+  clearGhostTimer();
   stopReplay();
   chess = new Chess();
   playerColor = asBlack ? 'b' : 'w';
@@ -325,11 +346,12 @@ function newGame(asBlack) {
   render();
   if (asBlack) {
     ghostThinking = true;
-    setTimeout(ghostReply, 900);
+    ghostTimer = setTimeout(ghostReply, 900);
   }
 }
 
 function startOperaReplay() {
+  clearGhostTimer();
   replayGame = operaGame();
   if (!replayGame) {
     speak('The Opera Game could not be found in the book. The ghost apologises.');
@@ -343,6 +365,10 @@ function startOperaReplay() {
       resigned,
       offBookAnnounced,
       ghostAnchor: ghostAnchor.gameId,
+      commentaryHtml: commentEl.innerHTML,
+      sourceText: sourceEl.textContent,
+      sourceIsBook: sourceEl.className === 'source-book',
+      ghostState: ghostStateEl.textContent,
     };
   }
   chess = new Chess();
@@ -379,6 +405,7 @@ function replayStep(dir) {
 }
 
 function exitReplay() {
+  clearGhostTimer();
   stopReplay();
   $('replay-bar').classList.add('hidden');
   if (!savedGame) return newGame(false);
@@ -388,16 +415,18 @@ function exitReplay() {
   resigned = savedGame.resigned;
   offBookAnnounced = savedGame.offBookAnnounced;
   ghostAnchor.gameId = savedGame.ghostAnchor;
+  commentEl.innerHTML = savedGame.commentaryHtml || '';
+  setSource(savedGame.sourceText || '', savedGame.sourceIsBook !== false);
+  ghostStateEl.textContent = savedGame.ghostState || 'The ghost awaits…';
   mode = 'play';
   selected = null;
   legalTargets = [];
   ghostThinking = false;
-  ghostStateEl.textContent = 'The ghost awaits…';
   savedGame = null;
   render();
   if (!resigned && !chess.isGameOver() && chess.turn() !== playerColor) {
     ghostThinking = true;
-    setTimeout(ghostReply, 900);
+    ghostTimer = setTimeout(ghostReply, 900);
   }
 }
 
@@ -422,6 +451,7 @@ function init() {
   $('as-black').addEventListener('click', () => newGame(true));
   $('resign').addEventListener('click', () => {
     if (mode !== 'play' || chess.isGameOver() || resigned) return;
+    clearGhostTimer();
     resigned = true;
     speak(say.resignLine());
     render();
@@ -433,7 +463,7 @@ function init() {
   $('replay-auto').addEventListener('click', toggleAutoReplay);
   $('replay-exit').addEventListener('click', exitReplay);
   $('game-over-new').addEventListener('click', () => newGame(false));
-  document.querySelectorAll('#promotion-modal button').forEach(btn => {
+  document.querySelectorAll('#promotion-modal button[data-piece]').forEach(btn => {
     btn.addEventListener('click', () => {
       $('promotion-modal').classList.add('hidden');
       if (pendingPromotion) {
@@ -442,6 +472,10 @@ function init() {
         commitPlayerMove(from, to, btn.dataset.piece);
       }
     });
+  });
+  $('promotion-cancel').addEventListener('click', () => {
+    $('promotion-modal').classList.add('hidden');
+    pendingPromotion = null;
   });
   loadData()
     .then(() => {
