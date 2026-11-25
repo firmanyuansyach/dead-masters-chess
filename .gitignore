@@ -1,0 +1,12 @@
+# Dead Master's Chess — .gitignore
+# NOTE: .kiro/ must NEVER be ignored (Kiroween rules: missing or gitignored
+# /.kiro can disqualify the submission).
+node_modules/
+.DS_Store
+*.log
+
+
+
+
+
+
