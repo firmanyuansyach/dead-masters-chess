@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dead Master's Chess — play the ghost of Paul Morphy</title>
+<meta name="description" content="Play chess against the ghost of Paul Morphy (1837–1884). While your game follows a line he played, the ghost answers with his own recorded moves.">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header>
+  <p class="kicker">Kiroween 2026 · Costume Contest</p>
+  <h1>Dead Master&rsquo;s Chess</h1>
+  <p class="subtitle">One board. One ghost. <span id="book-count">Two hundred and sixteen recorded games.</span></p>
+</header>
+
+<main>
+  <section class="board-side">
+    <div id="board" aria-label="Chess board"></div>
+    <p id="captured" class="captured"></p>
+    <p id="status" class="status">Loading the book of the dead…</p>
+    <div class="controls">
+      <button id="new-game">New game</button>
+      <button id="as-black">Play as Black</button>
+      <button id="resign">Resign</button>
+      <button id="replay-opera" class="opera">Replay the Opera Game</button>
+    </div>
+    <div id="replay-bar" class="replay-bar hidden">
+      <p id="opera-title"></p>
+      <button id="replay-prev">‹ Prev</button>
+      <button id="replay-next">Next ›</button>
+      <button id="replay-auto">Auto-play</button>
+      <button id="replay-exit">Back to play</button>
+    </div>
+  </section>
+
+  <aside class="ghost-side">
+    <div class="portrait" aria-hidden="true">
+      <span class="ghost-glyph">&#9816;</span>
+      <p>Paul Morphy<br><span>1837–1884</span></p>
+    </div>
+    <p id="ghost-state" class="ghost-state">The ghost awaits…</p>
+    <p id="source-line" class="source-book"></p>
+    <div id="commentary" class="commentary"></div>
+    <h2>Moves</h2>
+    <div id="moves" class="moves"></div>
+    <p class="how">
+      How the ghost plays: while your game follows a line Morphy actually
+      played, the ghost answers with <strong>his own recorded moves</strong> —
+      each one named with the game it came from. Step off the book and the
+      ghost improvises with its own small engine, and says so.
+      <a href="README.md">Provenance &amp; rules</a>
+    </p>
+  </aside>
+</main>
+
+<div id="game-over" class="modal hidden">
+  <div class="modal-box">
+    <p id="game-over-text"></p>
+    <button id="game-over-new">New game</button>
+  </div>
+</div>
+
+<div id="promotion-modal" class="modal hidden">
+  <div class="modal-box">
+    <p>Your pawn reaches the last rank. Choose its new form:</p>
+    <div class="promo-pieces">
+      <button data-piece="q" aria-label="Queen">&#9813;</button>
+      <button data-piece="r" aria-label="Rook">&#9814;</button>
+      <button data-piece="b" aria-label="Bishop">&#9815;</button>
+      <button data-piece="n" aria-label="Knight">&#9816;</button>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <p>Built with Kiro for Kiroween 2026. Morphy&rsquo;s games are 19th-century
+  public-domain records, re-validated move by move. Rules by chess.js (MIT).</p>
+</footer>
+
+<script type="module" src="src/app.js"></script>
+</body>
+</html>
