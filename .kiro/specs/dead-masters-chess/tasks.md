@@ -132,3 +132,37 @@ earlier ones.
   play. Full suite 20/20 green, exit 0. The flaky self-play book-hit
   check was also fixed by seeding game 0 with 1.e4 instead of depending
   on random play stumbling into the book.
+- Live playthrough (2026-11-25 ~19:00, Firman's order, on the published
+  Pages URL): 20 plies by click, Play as Black, Resign, full Opera replay
+  to Rd8# — all worked, ghost stayed on-book while following Morphy
+  lines and labelled engine moves honestly. Bugs found and fixed in the
+  same round: (a) STALE GHOST TIMER — New game / Resign / replay clicked
+  while the ghost was thinking let its pending reply fire against the
+  reset board (ghost moved out of turn, game soft-locked on "The ghost
+  is thinking…"); fixed by tracking the timer and clearing it on every
+  state change, plus a guard inside ghostReply; (b) CAPTURED-PIECES
+  LABELS were hardcoded for White — in Play-as-Black mode the ghost's
+  capture was shown as "You have taken"; labels now follow playerColor;
+  (c) EXIT REPLAY left the Opera story in the ghost panel — the live
+  game's commentary and source line are now saved before the replay and
+  restored on exit; (d) replay checkmate status said "you win!" — now a
+  neutral "Checkmate." in replay mode; (e) promotion modal had no way
+  out — a Cancel button was added; (f) README said engine depth 3,
+  actual depth is 2. A new jsdom UI suite (tests/ui-test.mjs, 26 checks:
+  timer races, promotion via the Morphy vs Barnes 1859 e1=Q+ line,
+  drag-and-drop, replay restore, full game to termination) is green
+  26/26, and the headless suite stays 20/20. Drag could not be driven
+  by either automated browser (gesture unsupported); the jsdom suite
+  drives the drag handlers with synthetic events, and a real-mouse drag
+  still wants one manual check. Phone layout (390px) also unverified by
+  automation — CSS arithmetic says it fits (board min(92vw,540px),
+  wrapping controls), but confirm once on a real phone.
+- Live-site audit the same evening: the published ghost.js was CORRUPTED
+  by the GitHub web-editor paste — two piece-square table rows lost one
+  entry each (bishop + queen), so the engine's evaluation went NaN
+  whenever those pieces stood on the affected ranks. The repo copy must
+  be replaced with the correct local file. Data files are fine (parsed
+  identical, one trailing newline). Also found: GitHub Pages (Jekyll)
+  does NOT serve the .kiro/ directory (404) — the repo itself still
+  shows it, so the submission gate is met, but a .nojekyll file was
+  added so Pages serves the repo as-is.
