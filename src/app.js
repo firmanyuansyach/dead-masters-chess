@@ -40,6 +40,37 @@ let resigned = false;
 let operaFinaleSpoken = false;
 let savedGame = null; // live game preserved across an Opera replay
 let ghostAnchor = { gameId: null }; // the recorded game the ghost follows
+let lastMove = null; // { from, to } of the most recent move, for the highlight
+let moveSources = []; // per ply: { source: 'player'|'book'|'engine'|'replay', game }
+let drag = null; // touch-drag state { from, glyph, color, moved, ghostEl, startX, startY }
+
+// ---------- sound (WebAudio, no assets; silent where unsupported) ----------
+let soundOn = true;
+try { soundOn = localStorage.getItem('dmc-sound') !== 'off'; } catch { /* private mode */ }
+let audioCtx = null;
+function beep(freq, dur, type, gain) {
+  if (!soundOn) return;
+  try {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (typeof AC !== 'function') return;
+    audioCtx = audioCtx || new AC();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const o = audioCtx.createOscillator();
+    const g = audioCtx.createGain();
+    o.type = type || 'sine';
+    o.frequency.value = freq;
+    g.gain.setValueAtTime(gain || 0.08, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + dur);
+    o.connect(g).connect(audioCtx.destination);
+    o.start();
+    o.stop(audioCtx.currentTime + dur);
+  } catch { /* no audio in this environment */ }
+}
+function soundMove(captured, check) {
+  if (captured) beep(180, 0.12, 'triangle', 0.12);
+  else beep(520, 0.06, 'sine', 0.06);
+  if (check) setTimeout(() => beep(880, 0.15, 'sine', 0.06), 90);
+}
 
 // ---------- data ----------
 async function loadData() {
@@ -70,7 +101,12 @@ function render() {
       div.className = 'square ' + ((ri + ci) % 2 === 0 ? 'light' : 'dark');
       div.dataset.square = name;
       if (selected === name) div.classList.add('selected');
-      if (legalTargets.includes(name)) div.classList.add('legal');
+      if (lastMove && (lastMove.from === name || lastMove.to === name)) div.classList.add('last-move');
+      if (legalTargets.includes(name)) {
+        div.classList.add('legal');
+        const occ = chess.get(name);
+        if (occ && occ.color !== playerColor) div.classList.add('legal-capture');
+      }
       if (chess.isCheck()) {
         const kingSq = findKing(chess.turn());
         if (kingSq === name) div.classList.add('in-check');
@@ -84,6 +120,7 @@ function render() {
         div.appendChild(span);
       }
       div.addEventListener('click', () => onSquareClick(name));
+      div.addEventListener('pointerdown', (e) => onPointerDown(name, e));
       div.addEventListener('dragover', (e) => e.preventDefault());
       div.addEventListener('drop', (e) => {
         e.preventDefault();
@@ -99,6 +136,7 @@ function render() {
   renderMoves();
   renderCaptured();
   updateStatus();
+  ghostStateEl.classList.toggle('thinking', ghostThinking);
 }
 
 function findKing(color) {
@@ -117,10 +155,28 @@ function renderMoves() {
     const num = i / 2 + 1;
     const row = document.createElement('div');
     row.className = 'move-row';
-    row.innerHTML = `<span class="move-num">${num}.</span><span>${hist[i].san}</span><span>${hist[i + 1] ? hist[i + 1].san : ''}</span>`;
+    const srcCell = (ply) => {
+      const s = moveSources[ply];
+      return s && s.source === 'book' && s.game ? `<span class="move-src">${shortGame(s.game)}</span>` : '';
+    };
+    row.innerHTML = `<span class="move-num">${num}.</span><span>${hist[i].san}${srcCell(i)}</span><span>${hist[i + 1] ? hist[i + 1].san + srcCell(i + 1) : ''}</span>`;
     movesEl.appendChild(row);
   }
   movesEl.scrollTop = movesEl.scrollHeight;
+}
+
+// "Barnes vs Morphy, 1858" -> "Barnes 1858"; "Morphy vs De Riviere, 1863" -> "De Riviere 1863"
+function shortGame(game) {
+  const [names, year] = game.split(', ');
+  const opp = names.startsWith('Morphy vs ') ? names.slice('Morphy vs '.length) : names.split(' vs ')[0];
+  return `${opp} ${year || ''}`.trim();
+}
+
+function flashCapture(to) {
+  const sq = boardEl.querySelector(`.square[data-square="${to}"]`);
+  if (!sq) return;
+  sq.classList.add('capture-flash');
+  setTimeout(() => sq.classList.remove('capture-flash'), 750);
 }
 
 function renderCaptured() {
@@ -199,6 +255,45 @@ function onSquareClick(sq) {
   render();
 }
 
+// Touch drag (pointer events). Mouse keeps click + HTML5 drag; a finger
+// gets a floating piece that follows it. A tap (no movement) is left to
+// the click event, so tap-to-select still works exactly as before.
+function onPointerDown(sq, e) {
+  if (e.pointerType !== 'touch' && e.pointerType !== 'pen') return;
+  if (mode !== 'play' || ghostThinking || resigned || chess.turn() !== playerColor || chess.isGameOver()) return;
+  const piece = chess.get(sq);
+  if (!piece || piece.color !== playerColor) return;
+  drag = { from: sq, glyph: GLYPH[piece.color][piece.type], color: piece.color, moved: false, ghostEl: null, startX: e.clientX, startY: e.clientY };
+}
+function onPointerMove(e) {
+  if (!drag) return;
+  if (!drag.moved && Math.abs(e.clientX - drag.startX) + Math.abs(e.clientY - drag.startY) < 10) return;
+  if (!drag.moved) {
+    drag.moved = true;
+    const el = document.createElement('span');
+    el.className = 'drag-ghost ' + (drag.color === 'w' ? 'white-piece' : 'black-piece');
+    el.textContent = drag.glyph;
+    document.body.appendChild(el);
+    drag.ghostEl = el;
+  }
+  drag.ghostEl.style.left = e.clientX + 'px';
+  drag.ghostEl.style.top = e.clientY + 'px';
+  const t = e.target && e.target.closest ? e.target.closest('.square') : null;
+  boardEl.querySelectorAll('.drop-hover').forEach(d => d.classList.remove('drop-hover'));
+  if (t) t.classList.add('drop-hover');
+}
+function endPointerDrag(e, commit) {
+  if (!drag) return;
+  const d = drag;
+  drag = null;
+  if (d.ghostEl) d.ghostEl.remove();
+  boardEl.querySelectorAll('.drop-hover').forEach(x => x.classList.remove('drop-hover'));
+  if (!commit || !d.moved) return; // a tap: the click event handles selection
+  const t = e.target && e.target.closest ? e.target.closest('.square') : null;
+  const to = t ? t.dataset.square : null;
+  if (to && to !== d.from) tryPlayerMove(d.from, to);
+}
+
 function tryPlayerMove(from, to) {
   const piece = chess.get(from);
   if (!piece || piece.color !== playerColor) return;
@@ -222,10 +317,14 @@ function commitPlayerMove(from, to, promotion) {
   }
   selected = null;
   legalTargets = [];
+  lastMove = { from, to };
+  moveSources.push({ source: 'player', game: null });
+  soundMove(!!mv.captured, chess.isCheck());
   if (mv.captured) speak(say.captureLine(PIECE_NAME[mv.captured], false));
   if (chess.isCheckmate()) { afterMove(null); return; }
   if (mv.san.includes('+')) speak(say.checkLine(false));
   afterMove(mv);
+  if (mv.captured && !chess.isGameOver()) flashCapture(to);
 }
 
 function afterMove(playerMv) {
@@ -276,6 +375,9 @@ function ghostReply() {
     mv = chess.move(legal[0]);
     decision = { ...decision, source: 'engine' };
   }
+  lastMove = { from: mv.from, to: mv.to };
+  moveSources.push({ source: decision.source, game: decision.source === 'book' ? decision.game : null });
+  soundMove(!!mv.captured, chess.isCheck());
   if (decision.source === 'book') {
     ghostStateEl.textContent = 'On book — a move Morphy himself played';
     setSource(`Following ${decision.game}${decision.opening ? ` (${decision.opening})` : ''} — ${decision.san}`, true);
@@ -292,6 +394,7 @@ function ghostReply() {
   if (chess.isCheckmate()) { render(); return endGame(); }
   if (mv.san.includes('+')) speak(say.checkLine(true));
   render();
+  if (mv.captured) flashCapture(mv.to);
 }
 
 function endGame() {
@@ -336,6 +439,8 @@ function newGame(asBlack) {
   resigned = false;
   savedGame = null;
   ghostAnchor.gameId = null;
+  lastMove = null;
+  moveSources = [];
   $('promotion-modal').classList.add('hidden');
   $('game-over').classList.add('hidden');
   $('replay-bar').classList.add('hidden');
@@ -343,11 +448,9 @@ function newGame(asBlack) {
   setSource('', true);
   commentEl.innerHTML = '';
   speak(say.greeting(asBlack));
+  ghostThinking = !!asBlack;
   render();
-  if (asBlack) {
-    ghostThinking = true;
-    ghostTimer = setTimeout(ghostReply, 900);
-  }
+  if (asBlack) ghostTimer = setTimeout(ghostReply, 900);
 }
 
 function startOperaReplay() {
@@ -369,6 +472,8 @@ function startOperaReplay() {
       sourceText: sourceEl.textContent,
       sourceIsBook: sourceEl.className === 'source-book',
       ghostState: ghostStateEl.textContent,
+      moveSources: [...moveSources],
+      lastMove,
     };
   }
   chess = new Chess();
@@ -379,6 +484,8 @@ function startOperaReplay() {
   selected = null;
   legalTargets = [];
   ghostThinking = false;
+  lastMove = null;
+  moveSources = [];
   $('replay-bar').classList.remove('hidden');
   $('opera-title').textContent = `${replayGame.white} vs ${replayGame.black}, ${replayGame.date || '1858'} — ${replayGame.result}`;
   commentEl.innerHTML = '';
@@ -391,8 +498,10 @@ function startOperaReplay() {
 function replayStep(dir) {
   if (!replayGame) return;
   if (dir > 0 && replayIndex < replayGame.sans.length) {
-    chess.move(replayGame.sans[replayIndex]);
+    const mv = chess.move(replayGame.sans[replayIndex]);
     replayIndex++;
+    lastMove = { from: mv.from, to: mv.to };
+    moveSources.push({ source: 'replay', game: null });
     if (replayIndex === replayGame.sans.length && !operaFinaleSpoken) {
       operaFinaleSpoken = true;
       speak('17. Rd8# — mate. The Duke and the Count resign; the opera sings on. The most famous finish in chess.');
@@ -400,8 +509,16 @@ function replayStep(dir) {
   } else if (dir < 0 && replayIndex > 0) {
     chess.undo();
     replayIndex--;
+    moveSources.pop();
+    const hist = chess.history({ verbose: true });
+    lastMove = hist.length ? { from: hist[hist.length - 1].from, to: hist[hist.length - 1].to } : null;
   }
   render();
+  if (dir > 0) {
+    const hist = chess.history({ verbose: true });
+    const last = hist[hist.length - 1];
+    if (last && last.captured) flashCapture(last.to);
+  }
 }
 
 function exitReplay() {
@@ -415,6 +532,8 @@ function exitReplay() {
   resigned = savedGame.resigned;
   offBookAnnounced = savedGame.offBookAnnounced;
   ghostAnchor.gameId = savedGame.ghostAnchor;
+  moveSources = savedGame.moveSources || [];
+  lastMove = savedGame.lastMove || null;
   commentEl.innerHTML = savedGame.commentaryHtml || '';
   setSource(savedGame.sourceText || '', savedGame.sourceIsBook !== false);
   ghostStateEl.textContent = savedGame.ghostState || 'The ghost awaits…';
@@ -423,11 +542,10 @@ function exitReplay() {
   legalTargets = [];
   ghostThinking = false;
   savedGame = null;
+  const ghostToMove = !resigned && !chess.isGameOver() && chess.turn() !== playerColor;
+  ghostThinking = ghostToMove;
   render();
-  if (!resigned && !chess.isGameOver() && chess.turn() !== playerColor) {
-    ghostThinking = true;
-    ghostTimer = setTimeout(ghostReply, 900);
-  }
+  if (ghostToMove) ghostTimer = setTimeout(ghostReply, 900);
 }
 
 function stopReplay() {
@@ -463,6 +581,20 @@ function init() {
   $('replay-auto').addEventListener('click', toggleAutoReplay);
   $('replay-exit').addEventListener('click', exitReplay);
   $('game-over-new').addEventListener('click', () => newGame(false));
+  document.addEventListener('pointermove', onPointerMove);
+  document.addEventListener('pointerup', (e) => endPointerDrag(e, true));
+  document.addEventListener('pointercancel', (e) => endPointerDrag(e, false));
+  const soundBtn = $('sound-toggle');
+  const applySoundLabel = () => {
+    soundBtn.textContent = soundOn ? 'Sound: on' : 'Sound: off';
+    soundBtn.setAttribute('aria-pressed', String(soundOn));
+  };
+  applySoundLabel();
+  soundBtn.addEventListener('click', () => {
+    soundOn = !soundOn;
+    try { localStorage.setItem('dmc-sound', soundOn ? 'on' : 'off'); } catch { /* private mode */ }
+    applySoundLabel();
+  });
   document.querySelectorAll('#promotion-modal button[data-piece]').forEach(btn => {
     btn.addEventListener('click', () => {
       $('promotion-modal').classList.add('hidden');
