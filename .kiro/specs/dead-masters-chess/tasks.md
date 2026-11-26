@@ -166,3 +166,15 @@ earlier ones.
   does NOT serve the .kiro/ directory (404) — the repo itself still
   shows it, so the submission gate is met, but a .nojekyll file was
   added so Pages serves the repo as-is.
+- Polish round (2026-11-25 ~21:00, Firman's "poles sekarang", display/UX
+  layer only — book, anchoring, engine untouched): vignette + candle
+  glow on the title, deeper piece shadows, last-move highlight, capture
+  flash, pulsing check glow on the king, red ring on capture targets;
+  ghost-state pulses while thinking; move list names the Morphy game of
+  each book move; WebAudio sound toggle (move/capture/check, persisted);
+  touch drag via pointer events (mouse keeps click + HTML5 drag, tap
+  still selects); buttons min 44px, two-per-row on small screens. UI
+  suite grew to 36 checks (section G) and is green; headless suite
+  stays 20/20. One short Kiro review burst (burst 3): its single
+  FIX-FIRST was a misread — moveSources pushes after the successful
+  chess.move — only a mobile button-width tidy came out of it.
