@@ -44,8 +44,18 @@ every CLI session was short, scoped, and logged here.
   carries per-game entries, `ghostMove` anchors to one recorded game, and
   the playtest enforces it (7a/7b). The design.md algorithm section was
   amended by hand to match.
+- The evening polish round (2026-11-25 ~21:00, Firman's "poles sekarang")
+  was built and tested by hand — vignette/candle glow, last-move and
+  check highlights, capture flash, touch drag, sound toggle, move-list
+  Morphy sources — and then given one short low-effort CLI review burst
+  (burst 3). Kiro's verdict was FIX-FIRST on one point (moveSources
+  pushed before chess.move), which turned out to be a misread on
+  re-check: the push sits after the successful move, inside the
+  try/catch's success path. No code change came out of burst 3 except a
+  small mobile button-width tidy it also flagged. UI suite grew to 36
+  checks for the polish; headless suite unchanged at 20/20.
 
 ## Credit note
 
-Built on the Kiro Free tier (50 credits/month). Two short low-effort CLI
+Built on the Kiro Free tier (50 credits/month). Three short low-effort CLI
 sessions; no credit request was filed (per Firman's decision, 2026-11-20).
