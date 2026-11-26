@@ -59,8 +59,10 @@ const $ = (id) => document.getElementById(id);
 const sq = (name) => document.querySelector(`.square[data-square="${name}"]`);
 const clickSq = (name) => sq(name).dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
 const clickBtn = (id) => $(id).dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
-const moveSans = () => [...document.querySelectorAll('#moves .move-row span:not(.move-num)')]
-  .map((s) => s.textContent).filter(Boolean);
+const moveSans = () => [...document.querySelectorAll('#moves .move-row span:not(.move-num):not(.move-src)')]
+  // The SAN is the cell's own first text node; the .move-src child span
+  // (the Morphy source game) must not be read as part of the move.
+  .map((s) => (s.childNodes[0] ? s.childNodes[0].textContent.trim() : '')).filter(Boolean);
 const boardPieceCount = () => document.querySelectorAll('#board .piece').length;
 const promoVisible = () => !$('promotion-modal').classList.contains('hidden');
 const gameOverVisible = () => !$('game-over').classList.contains('hidden');
@@ -253,6 +255,61 @@ await sleep(100);
 check('exit replay restores the live moves', moveSans().join(' ') === movesBefore, moveSans().join(' '));
 check('exit replay restores the commentary', $('commentary').innerHTML === commentBefore);
 check('exit replay restores the source line', $('source-line').textContent === sourceBefore);
+
+// ---------- TEST G: polish — last-move highlight, check pulse, move sources, sound, touch drag ----------
+console.log('== G. Polish ==');
+// G1: after 1.e4 + ghost reply, both squares of the ghost's last move glow.
+clickBtn('new-game');
+await sleep(200);
+clickSq('e2'); clickSq('e4');
+await waitForPlayerTurn();
+const gHist = mirrorChess().history({ verbose: true });
+const gMove = gHist[1];
+check('last-move highlight marks the ghost reply squares',
+  !!gMove
+  && document.querySelector(`.square[data-square="${gMove.from}"].last-move`) !== null
+  && document.querySelector(`.square[data-square="${gMove.to}"].last-move`) !== null,
+  moveSans().join(' '));
+// G2: check pulse — Opera replay ends in mate, the mated king's square pulses.
+clickBtn('replay-opera');
+await sleep(100);
+for (let i = 0; i < 33; i++) clickBtn('replay-next');
+await sleep(100);
+check('mated king square pulses in-check', document.querySelector('.square.in-check') !== null);
+clickBtn('replay-exit');
+await sleep(100);
+// G3: the move list names the Morphy game a book move came from.
+clickBtn('as-black');
+check('ghost-state pulses while the ghost is thinking',
+  document.querySelector('#ghost-state.thinking') !== null);
+await waitForPlayerTurn(8000);
+check('ghost-state stops pulsing after the reply',
+  document.querySelector('#ghost-state.thinking') === null, $('ghost-state').textContent);
+check('move list names the Morphy source game of a book move',
+  document.querySelector('.move-src') !== null, $('moves').textContent);
+// G4: sound toggle flips its label (no audio device in jsdom — must not crash).
+const soundBtn = $('sound-toggle');
+const label0 = soundBtn.textContent;
+soundBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+check('sound toggle turns off', soundBtn.textContent !== label0 && soundBtn.textContent.includes('off'), soundBtn.textContent);
+soundBtn.dispatchEvent(new window.MouseEvent('click', { bubbles: true }));
+check('sound toggle turns back on', soundBtn.textContent === label0, soundBtn.textContent);
+// G5: touch drag — pointer events with a finger, e2 to e4.
+clickBtn('new-game');
+await sleep(200);
+if (typeof window.PointerEvent !== 'function') {
+  console.log('   (touch-drag test skipped: this jsdom has no PointerEvent)');
+} else {
+  const p2 = document.querySelector('.square[data-square="e2"] .piece');
+  p2.dispatchEvent(new window.PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch', clientX: 10, clientY: 10 }));
+  const t4 = document.querySelector('.square[data-square="e4"]');
+  t4.dispatchEvent(new window.PointerEvent('pointermove', { bubbles: true, pointerType: 'touch', clientX: 30, clientY: 40 }));
+  check('touch drag shows the floating piece', document.querySelector('.drag-ghost') !== null);
+  t4.dispatchEvent(new window.PointerEvent('pointerup', { bubbles: true, pointerType: 'touch', clientX: 30, clientY: 40 }));
+  await sleep(60);
+  check('touch drag e2-e4 moves the pawn', moveSans().includes('e4'), moveSans().join(' '));
+  check('ghost replies after a touch drag', await waitForPlayerTurn(), `status: ${$('status').textContent}`);
+}
 
 check('no JS errors during the whole UI run', jsErrors.length === 0, jsErrors.join(' | ').slice(0, 300));
 
