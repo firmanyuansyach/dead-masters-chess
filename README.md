@@ -23,12 +23,16 @@ highlighted square (or drag). The ghost replies after a suitably theatrical paus
 
 - **Play as White or Black** — the ghost plays Morphy's moves either way.
 - **On-book indicator** — when the ghost plays a recorded Morphy move, the panel
-  names the game it came from (e.g. *Morphy vs Anderssen, Paris 1858*).
+  names the game it came from (e.g. *Morphy vs Anderssen, Paris 1858*), and the
+  move list shows the same source under the move.
 - **Replay the Opera Game** — watch Morphy's most famous 17-move victory,
   move by move, with the story told as it unfolds.
 - **Ghost commentary** — era-flavoured remarks when the book is left, a piece
   falls, or check is given. The ghost never claims a move is Morphy's when it
   is not: off-book moves are marked as the ghost's own invention.
+- **Haunted-hall presentation** — candlelit vignette, last-move and check
+  highlights, capture flash, sound effects with a toggle (WebAudio, no
+  assets), touch drag on phones as well as mouse drag and click.
 - **Full rules** — legal move generation, check, checkmate, stalemate, draw by
   insufficient material / fifty moves / threefold repetition, castling,
   en passant, promotion.
